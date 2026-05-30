@@ -7,12 +7,14 @@ import { db } from "@hoopmanager/db";
 const NAV_ITEMS = [
   { href: "/dashboard",  label: "Dashboard",  icon: "⬡" },
   { href: "/team",       label: "My Team",    icon: "👥" },
+  { href: "/schedule",   label: "Schedule",   icon: "📅" },
+  { href: "/playoffs",   label: "Playoffs",   icon: "🏆" },
   { href: "/training",   label: "Training",   icon: "🏋️" },
-  { href: "/league",     label: "League",     icon: "🏆" },
+  { href: "/league",     label: "League",     icon: "📊" },
   { href: "/transfers",  label: "Transfers",  icon: "🔄" },
   { href: "/draft",      label: "Draft",      icon: "🎓" },
   { href: "/finances",   label: "Finances",   icon: "💰" },
-  { href: "/analytics",  label: "Analytics",  icon: "📊" },
+  { href: "/analytics",  label: "Analytics",  icon: "🔬" },
   { href: "/inbox",      label: "Inbox",      icon: "📬" },
 ];
 

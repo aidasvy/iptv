@@ -5,4 +5,6 @@ export { computeAdvancedStats, computeVORP, computeWinShares, estimateBPM, compu
 export { computeCapSheet, maxContractAmount, validateTrade } from "./season/salary-cap";
 export { toSimPlayer } from "./player/sim-player";
 export { generateProspects, generateProspectAttributes, getRevealedAttributes, scoutingCost, aiDraftPick } from "./season/draft";
+export { seedPlayoffs, buildInitialBracket, advanceRound, checkSeriesWinner, roundLabel, SERIES_LENGTH } from "./season/playoffs";
+export type { PlayoffSeed, PlayoffMatchup, PlayoffBracket } from "./season/playoffs";
 export type * from "./types";
