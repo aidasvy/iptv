@@ -1,0 +1,598 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Position {
+  PG  // Point Guard
+  SG  // Shooting Guard
+  SF  // Small Forward
+  PF  // Power Forward
+  C   // Center
+}
+
+enum Potential {
+  ELITE     // A+ — franchise cornerstone
+  STAR      // A  — all-star caliber ceiling
+  STARTER   // B  — reliable starter
+  ROTATION  // C  — solid rotation player
+  FRINGE    // D  — bench/development
+}
+
+enum ContractType {
+  ROOKIE
+  VETERAN
+  MAX
+  SUPERMAX
+  MINIMUM
+  TWO_WAY
+}
+
+enum InjuryType {
+  ANKLE_SPRAIN
+  KNEE_LIGAMENT
+  HAMSTRING
+  CALF_STRAIN
+  BACK_PAIN
+  CONCUSSION
+  SHOULDER
+  WRIST
+  FRACTURE
+  FATIGUE
+}
+
+enum OffensiveScheme {
+  PACE_AND_SPACE    // 3-point heavy, spread floor
+  TRIANGLE          // Ball movement, post entries
+  MOTION_OFFENSE    // Constant cutting and screening
+  ISOLATION         // Star-driven, one-on-one
+  PICK_AND_ROLL     // Two-man game centric
+  PRINCETON         // Passing game, high IQ
+  RUN_AND_GUN       // Fast break emphasis
+  HALF_COURT_GRIND  // Methodical, shot clock management
+}
+
+enum DefensiveScheme {
+  MAN_TO_MAN
+  ZONE_2_3
+  ZONE_3_2
+  PRESS_FULL
+  PRESS_HALF
+  SWITCHING_EVERYTHING
+  DROP_COVERAGE         // Sag on PNR
+  AGGRESSIVE_HELP       // Rotate early, gamble
+}
+
+enum TradeStatus {
+  PROPOSED
+  ACCEPTED
+  REJECTED
+  COUNTERED
+  EXPIRED
+}
+
+enum SeasonPhase {
+  PRESEASON
+  REGULAR_SEASON
+  PLAYOFFS
+  FINALS
+  OFFSEASON_DRAFT
+  OFFSEASON_FREE_AGENCY
+  OFFSEASON_TRAINING
+}
+
+enum LeagueType {
+  COMPETITIVE   // 16 teams, full season
+  CASUAL        // 8 teams, shorter season
+}
+
+// ─── Users ────────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash  String
+  displayName   String
+  avatar        String?
+  timezone      String    @default("UTC")
+  reputation    Int       @default(1000)   // ELO-style manager reputation
+  totalSeasons  Int       @default(0)
+  trophies      Int       @default(0)
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  teams         Team[]
+  sentTrades    TradeOffer[]  @relation("SentTrades")
+  receivedTrades TradeOffer[] @relation("ReceivedTrades")
+  messages      Message[]
+  notifications Notification[]
+  staff         Staff[]
+}
+
+// ─── League ───────────────────────────────────────────────────────────────────
+
+model League {
+  id            String      @id @default(cuid())
+  name          String
+  slug          String      @unique
+  type          LeagueType  @default(COMPETITIVE)
+  maxTeams      Int         @default(16)
+  salaryCap     Int         @default(136000)  // in $K — mirrors NBA cap
+  luxuryTax     Int         @default(165000)
+  currentPhase  SeasonPhase @default(OFFSEASON_TRAINING)
+  currentWeek   Int         @default(1)
+  isPublic      Boolean     @default(true)
+  passwordHash  String?     // private leagues
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  seasons       Season[]
+  teams         Team[]
+  draftClasses  DraftClass[]
+  freeAgents    Player[]    @relation("FreeAgents")
+}
+
+// ─── Season ───────────────────────────────────────────────────────────────────
+
+model Season {
+  id            String   @id @default(cuid())
+  leagueId      String
+  seasonNumber  Int
+  startDate     DateTime
+  endDate       DateTime?
+  champion      String?  // teamId
+  createdAt     DateTime @default(now())
+
+  league        League   @relation(fields: [leagueId], references: [id])
+  games         Game[]
+  standings     Standing[]
+  playerStats   SeasonPlayerStat[]
+}
+
+// ─── Team ─────────────────────────────────────────────────────────────────────
+
+model Team {
+  id              String   @id @default(cuid())
+  leagueId        String
+  managerId       String
+  name            String
+  city            String
+  abbreviation    String   @db.VarChar(3)
+  primaryColor    String   @default("#1D428A")
+  secondaryColor  String   @default("#FFC72C")
+  arena           String   @default("City Arena")
+  arenaCapacity   Int      @default(18000)
+
+  // Finances
+  budget          Int      @default(50000)   // $K available cash
+  totalSalary     Int      @default(0)       // computed from roster
+  luxuryTaxBill   Int      @default(0)
+
+  // Tactics
+  offensiveScheme  OffensiveScheme @default(PACE_AND_SPACE)
+  defensiveScheme  DefensiveScheme @default(MAN_TO_MAN)
+  tempoSetting     Int             @default(50)   // 1-100: slow to fast
+  aggressionLevel  Int             @default(50)   // 1-100: passive to aggressive
+  threePointRate   Int             @default(50)   // 1-100: inside-out balance
+
+  // Lineup (stored as ordered player IDs)
+  starterPG       String?
+  starterSG       String?
+  starterSF       String?
+  starterPF       String?
+  starterC        String?
+  rotationOrder   String[]  // ordered bench rotation
+
+  // Chemistry (computed)
+  teamChemistry   Int      @default(75)   // 0-100
+  lockerRoomMood  Int      @default(75)   // 0-100
+
+  fanBase         Int      @default(5000)    // fans — grows with wins
+  reputation      Int      @default(500)     // attracts free agents
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  league          League   @relation(fields: [leagueId], references: [id])
+  manager         User     @relation(fields: [managerId], references: [id])
+  players         Player[]
+  staff           Staff[]
+  homeGames       Game[]   @relation("HomeTeam")
+  awayGames       Game[]   @relation("AwayTeam")
+  standings       Standing[]
+  sentTrades      TradeOffer[] @relation("TradeFromTeam")
+  receivedTrades  TradeOffer[] @relation("TradeToTeam")
+  draftPicks      DraftPick[]
+  trainingSchedule TrainingSchedule[]
+
+  @@unique([leagueId, name])
+}
+
+// ─── Player ───────────────────────────────────────────────────────────────────
+
+model Player {
+  id            String    @id @default(cuid())
+  firstName     String
+  lastName      String
+  age           Int
+  nationality   String
+  position      Position
+  secondPos     Position?
+
+  // ── Physical (1–100) ──────────────────────────────────────────────────────
+  speed         Int   // Lateral quickness and sprint speed
+  strength      Int   // Physical strength — post play, fighting for position
+  verticalJump  Int   // Jumping — dunks, blocks, rebounding
+  stamina       Int   // Minutes management; drops with fatigue
+  wingspan      Int   // Hidden physical advantage for blocks/steals
+
+  // ── Offense (1–100) ───────────────────────────────────────────────────────
+  ballHandling  Int   // Dribbling under pressure, creating off the dribble
+  passing       Int   // Court vision, decision making, assist generation
+  threePoint    Int   // Spot-up and off-dribble 3PT
+  midRange      Int   // Pull-ups, floaters, step-backs
+  insideScoring Int   // At-rim finishing, contact layups
+  postGame      Int   // Post moves, footwork, drop steps
+  freeThrow     Int   // FT accuracy (crucial in clutch)
+  offMovement   Int   // Off-ball cuts, screens, spacing IQ
+
+  // ── Defense (1–100) ───────────────────────────────────────────────────────
+  perimeterDef  Int   // On-ball perimeter defense, staying in front
+  interiorDef   Int   // Post defense, help-side positioning
+  rebounding    Int   // Positioning and timing for boards
+  shotBlocking  Int   // Rim protection, chase-down blocks
+  stealing      Int   // Anticipation, hand speed, gambling
+  defensiveIQ   Int   // Rotations, scheme adherence, communication
+
+  // ── Mental (1–100) ────────────────────────────────────────────────────────
+  offensiveIQ   Int   // Play reading, decision speed, shot selection
+  leadership    Int   // Boosts teammates' morale and performance
+  clutch        Int   // Performance modifier in close-game moments
+  coachability  Int   // Training gain multiplier, adapts to scheme
+  consistency   Int   // Game-to-game variance reduction
+
+  // ── Development ───────────────────────────────────────────────────────────
+  potential     Potential @default(ROTATION)
+  // Hidden from manager until scouted; revealed gradually
+  potentialKnown Boolean  @default(false)
+
+  // ── Contract ──────────────────────────────────────────────────────────────
+  salary        Int   // Annual salary in $K
+  contractYears Int
+  contractType  ContractType @default(VETERAN)
+  noTradeClause Boolean      @default(false)
+
+  // ── Status ────────────────────────────────────────────────────────────────
+  morale        Int   @default(75)   // 0-100; drops if unhappy
+  form          Int   @default(75)   // 0-100; hot/cold streaks
+  fatigue       Int   @default(0)    // 0-100; accumulates over games
+  isInjured     Boolean @default(false)
+  injuryType    InjuryType?
+  injuryWeeks   Int   @default(0)
+  isSuspended   Boolean @default(false)
+  suspensionGames Int @default(0)
+
+  // ── Relations ─────────────────────────────────────────────────────────────
+  teamId        String?
+  team          Team?   @relation(fields: [teamId], references: [id])
+  freeAgentLeagueId String?
+  freeAgentLeague League? @relation("FreeAgents", fields: [freeAgentLeagueId], references: [id])
+
+  gameStats         GamePlayerStat[]
+  seasonStats       SeasonPlayerStat[]
+  trainingSessions  TrainingSession[]
+  tradeAssets       TradeAsset[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ─── Staff ────────────────────────────────────────────────────────────────────
+
+enum StaffRole {
+  HEAD_COACH
+  ASSISTANT_COACH
+  SCOUT
+  TRAINER         // Boosts training gains
+  TEAM_DOCTOR     // Reduces injury duration
+  ANALYST         // Reveals more opponent scouting info
+}
+
+model Staff {
+  id        String    @id @default(cuid())
+  userId    String?   // if user-controlled head coach
+  teamId    String
+  role      StaffRole
+  name      String
+  salary    Int
+  // Skill 1-100 for their role
+  skill     Int
+  createdAt DateTime  @default(now())
+
+  team      Team      @relation(fields: [teamId], references: [id])
+  user      User?     @relation(fields: [userId], references: [id])
+}
+
+// ─── Game ─────────────────────────────────────────────────────────────────────
+
+model Game {
+  id            String    @id @default(cuid())
+  seasonId      String
+  week          Int
+  homeTeamId    String
+  awayTeamId    String
+  homeScore     Int?
+  awayScore     Int?
+  isPlayed      Boolean   @default(false)
+  scheduledAt   DateTime
+
+  // Rich simulation output
+  playByPlay    Json?     // Array of play events
+  boxScore      Json?     // Full stat lines
+  gameNarrative String?   // AI-generated match report
+  momentum      Json?     // Quarter-by-quarter momentum swings
+  clutchMoments Json?     // Key plays in final 2 minutes
+
+  season        Season    @relation(fields: [seasonId], references: [id])
+  homeTeam      Team      @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam      Team      @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  playerStats   GamePlayerStat[]
+
+  createdAt     DateTime  @default(now())
+}
+
+// ─── Game Stats ───────────────────────────────────────────────────────────────
+
+model GamePlayerStat {
+  id            String  @id @default(cuid())
+  gameId        String
+  playerId      String
+  teamId        String
+  isStarter     Boolean @default(false)
+
+  // Traditional
+  minutes       Float
+  points        Int
+  assists       Int
+  rebounds      Int
+  offRebounds   Int
+  defRebounds   Int
+  steals        Int
+  blocks        Int
+  turnovers     Int
+  fouls         Int
+  plusMinus     Int
+
+  // Shooting splits
+  fgm           Int     // Field goals made
+  fga           Int     // Field goals attempted
+  threePM       Int
+  threePA       Int
+  ftm           Int
+  fta           Int
+
+  // Advanced (computed post-game)
+  per           Float?  // Player Efficiency Rating
+  trueShootingPct Float?
+  usageRate     Float?
+  bpm           Float?  // Box Plus/Minus
+
+  game          Game    @relation(fields: [gameId], references: [id])
+  player        Player  @relation(fields: [playerId], references: [id])
+
+  @@unique([gameId, playerId])
+}
+
+// ─── Season Aggregated Stats ──────────────────────────────────────────────────
+
+model SeasonPlayerStat {
+  id              String  @id @default(cuid())
+  seasonId        String
+  playerId        String
+  teamId          String
+  gamesPlayed     Int     @default(0)
+  gamesStarted    Int     @default(0)
+  minutesPerGame  Float   @default(0)
+
+  // Per-game averages
+  ppg             Float   @default(0)   // Points
+  rpg             Float   @default(0)   // Rebounds
+  apg             Float   @default(0)   // Assists
+  spg             Float   @default(0)   // Steals
+  bpg             Float   @default(0)   // Blocks
+  topg            Float   @default(0)   // Turnovers
+  fgPct           Float   @default(0)
+  threePct        Float   @default(0)
+  ftPct           Float   @default(0)
+
+  // Advanced
+  per             Float   @default(0)
+  winShares       Float   @default(0)
+  bpm             Float   @default(0)
+  vorp            Float   @default(0)   // Value over replacement
+  trueShootingPct Float   @default(0)
+  usageRate       Float   @default(0)
+  offRtg          Float   @default(0)   // Offensive rating when on court
+  defRtg          Float   @default(0)   // Defensive rating when on court
+
+  season          Season  @relation(fields: [seasonId], references: [id])
+  player          Player  @relation(fields: [playerId], references: [id])
+
+  @@unique([seasonId, playerId])
+}
+
+// ─── Standings ────────────────────────────────────────────────────────────────
+
+model Standing {
+  id            String  @id @default(cuid())
+  seasonId      String
+  teamId        String
+  week          Int
+  wins          Int     @default(0)
+  losses        Int     @default(0)
+  pointsFor     Int     @default(0)
+  pointsAgainst Int     @default(0)
+  streak        Int     @default(0)   // positive=win streak, negative=loss
+  homeRecord    String  @default("0-0")
+  awayRecord    String  @default("0-0")
+  last10        String  @default("0-0")
+  playoffSeed   Int?
+
+  season        Season  @relation(fields: [seasonId], references: [id])
+  team          Team    @relation(fields: [teamId], references: [id])
+
+  @@unique([seasonId, teamId, week])
+}
+
+// ─── Training ─────────────────────────────────────────────────────────────────
+
+enum TrainingFocus {
+  SHOOTING        // threePoint + midRange + freeThrow
+  ATHLETICISM     // speed + verticalJump + stamina
+  BALL_SKILLS     // ballHandling + passing
+  DEFENSE         // perimeterDef + interiorDef + defensiveIQ
+  STRENGTH        // strength + interiorDef + rebounding
+  PLAYMAKING      // offensiveIQ + passing + offMovement
+  FINISHING       // insideScoring + postGame
+  MENTAL          // leadership + clutch + consistency
+}
+
+model TrainingSchedule {
+  id        String        @id @default(cuid())
+  teamId    String
+  week      Int
+  focus     TrainingFocus
+  intensity Int           @default(50)  // 1-100: low to brutal
+  // Higher intensity = more gains but higher injury risk
+
+  team      Team          @relation(fields: [teamId], references: [id])
+  sessions  TrainingSession[]
+
+  @@unique([teamId, week])
+}
+
+model TrainingSession {
+  id          String        @id @default(cuid())
+  playerId    String
+  scheduleId  String
+  gain        Json          // { attribute: gainAmount } per attribute trained
+  injuryRisk  Float         // 0-1 probability triggered
+  resultedInInjury Boolean  @default(false)
+
+  player      Player        @relation(fields: [playerId], references: [id])
+  schedule    TrainingSchedule @relation(fields: [scheduleId], references: [id])
+}
+
+// ─── Draft ────────────────────────────────────────────────────────────────────
+
+model DraftClass {
+  id        String  @id @default(cuid())
+  leagueId  String
+  season    Int
+  picks     DraftPick[]
+  prospects DraftProspect[]
+
+  league    League  @relation(fields: [leagueId], references: [id])
+}
+
+model DraftProspect {
+  id            String    @id @default(cuid())
+  draftClassId  String
+  firstName     String
+  lastName      String
+  age           Int       @default(19)
+  nationality   String
+  position      Position
+  potential     Potential
+  // Scouting reveals attributes gradually; unknown = -1
+  scoutingLevel Int       @default(0)  // 0-5 (0=unknown, 5=fully scouted)
+  attributes    Json      // partial reveal based on scoutingLevel
+  draftedByTeamId String?
+  draftedAtPick   Int?
+
+  draftClass    DraftClass @relation(fields: [draftClassId], references: [id])
+}
+
+model DraftPick {
+  id          String  @id @default(cuid())
+  draftClassId String
+  teamId      String
+  round       Int
+  pickNumber  Int?    // null until finalized
+  isOwn       Boolean @default(true)
+  fromTeamId  String? // original team if traded
+  isUsed      Boolean @default(false)
+
+  draftClass  DraftClass @relation(fields: [draftClassId], references: [id])
+  team        Team       @relation(fields: [teamId], references: [id])
+}
+
+// ─── Transfers & Trades ───────────────────────────────────────────────────────
+
+model TradeOffer {
+  id            String      @id @default(cuid())
+  fromUserId    String
+  toUserId      String
+  fromTeamId    String
+  toTeamId      String
+  status        TradeStatus @default(PROPOSED)
+  message       String?
+  expiresAt     DateTime
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  fromUser      User        @relation("SentTrades", fields: [fromUserId], references: [id])
+  toUser        User        @relation("ReceivedTrades", fields: [toUserId], references: [id])
+  fromTeam      Team        @relation("TradeFromTeam", fields: [fromTeamId], references: [id])
+  toTeam        Team        @relation("TradeToTeam", fields: [toTeamId], references: [id])
+  assets        TradeAsset[]
+}
+
+model TradeAsset {
+  id          String    @id @default(cuid())
+  tradeId     String
+  playerId    String?
+  draftPickId String?
+  cash        Int?      // Cash included in deal ($K)
+  direction   String    // "from" or "to" (relative to TradeOffer.fromTeam)
+
+  trade       TradeOffer @relation(fields: [tradeId], references: [id])
+  player      Player?    @relation(fields: [playerId], references: [id])
+}
+
+// ─── Messaging ────────────────────────────────────────────────────────────────
+
+model Message {
+  id          String   @id @default(cuid())
+  fromUserId  String
+  toUserId    String?  // null = league-wide broadcast
+  leagueId    String?
+  subject     String
+  body        String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  fromUser    User     @relation(fields: [fromUserId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // TRADE_RECEIVED, GAME_RESULT, INJURY, PLAYER_UNHAPPY, etc.
+  title     String
+  body      String
+  data      Json?    // Context: gameId, playerId, etc.
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
