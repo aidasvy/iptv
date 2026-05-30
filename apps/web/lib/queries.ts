@@ -1,6 +1,6 @@
 // Server-side database query helpers used by server components.
 import { db } from "@hoopmanager/db";
-import { computeOverall } from "@hoopmanager/engine";
+import { computeOverall, toSimPlayer } from "@hoopmanager/engine";
 import type { SimPlayer } from "@hoopmanager/engine";
 
 // ─── Team queries ─────────────────────────────────────────────────────────────
@@ -120,34 +120,7 @@ export async function getLeagueOverview(leagueId: string) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Convert Prisma player record to SimPlayer for engine use
-export function toSimPlayer(p: any): SimPlayer {
-  return {
-    id: p.id,
-    name: `${p.firstName} ${p.lastName}`,
-    position: p.position,
-    secondPos: p.secondPos ?? null,
-    age: p.age,
-    attrs: {
-      speed: p.speed, strength: p.strength, verticalJump: p.verticalJump,
-      stamina: p.stamina, wingspan: p.wingspan,
-      ballHandling: p.ballHandling, passing: p.passing, threePoint: p.threePoint,
-      midRange: p.midRange, insideScoring: p.insideScoring, postGame: p.postGame,
-      freeThrow: p.freeThrow, offMovement: p.offMovement,
-      perimeterDef: p.perimeterDef, interiorDef: p.interiorDef,
-      rebounding: p.rebounding, shotBlocking: p.shotBlocking,
-      stealing: p.stealing, defensiveIQ: p.defensiveIQ,
-      offensiveIQ: p.offensiveIQ, leadership: p.leadership,
-      clutch: p.clutch, coachability: p.coachability, consistency: p.consistency,
-    },
-    potential: p.potential,
-    morale: p.morale,
-    form: p.form,
-    fatigue: p.fatigue,
-    isInjured: p.isInjured,
-    salary: p.salary,
-  };
-}
+export { toSimPlayer } from "@hoopmanager/engine";
 
 export function computePlayerOverall(p: any): number {
   return computeOverall(toSimPlayer(p));
